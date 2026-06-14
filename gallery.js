@@ -35,8 +35,7 @@ const GALLERY_IMAGES = [
    Leave the list empty [] to hide the section.
    ══════════════════════════════════════════ */
 const COMMISSIONED_IMAGES = [
-  // 'commission1.jpg',
-  // 'commission2.jpg',
+  'Krishna Sketch 1.jpg'
 ];
 
 /* ─── everything below runs automatically ─── */
