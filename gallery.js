@@ -20,7 +20,8 @@
 
 /* ── CONFIG ─────────────────────────────────────── */
 const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
-const MANIFEST_PATH    = 'images/manifest.json';
+const MANIFEST_PATH             = 'images/manifest.json';
+const COMMISSIONED_MANIFEST     = 'images/commissioned/manifest.json';
 
 /* ── FALLBACK (demo mode) ────────────────────────
  * If no manifest.json exists, the gallery tries the
@@ -36,17 +37,18 @@ const FALLBACK_IMAGES = [
 ];
 
 /* ── STATE ───────────────────────────────────────── */
-let allImages    = [];
-let currentIndex = 0;
+let allImages         = [];
+let commissionedImages = [];
+let currentIndex      = 0;
 
 /* ── DOM REFS ────────────────────────────────────── */
 const grid        = document.getElementById('masonryGrid');
 const emptyState  = document.getElementById('galleryEmpty');
-const countEl     = document.getElementById('galleryCount');
-const countPieces = document.getElementById('countPieces');
 const scrollProg  = document.getElementById('scrollProgress');
 const navEl       = document.getElementById('nav');
 const backToTop   = document.getElementById('backToTop');
+const commGrid    = document.getElementById('commissionedGrid');
+const commEmpty   = document.getElementById('commissionedEmpty');
 
 // Lightbox
 const lightbox   = document.getElementById('lightbox');
@@ -83,7 +85,7 @@ async function loadImages() {
   }
 
   renderGallery();
-  animateCounter(allImages.length);
+  loadCommissioned();
 }
 
 /* ── FORMAT FILENAME → READABLE LABEL ───────────── */
@@ -98,47 +100,58 @@ function formatName(filename) {
 
 /* ── RENDER MASONRY GRID ─────────────────────────── */
 function renderGallery() {
-  countEl.textContent = `${allImages.length} piece${allImages.length !== 1 ? 's' : ''}`;
+  buildGrid(allImages, grid, 0);
+}
 
-  allImages.forEach((img, i) => {
+/* ── LOAD & RENDER COMMISSIONED ──────────────────── */
+async function loadCommissioned() {
+  let commImages = [];
+  try {
+    const res = await fetch(COMMISSIONED_MANIFEST);
+    if (!res.ok) throw new Error('No commissioned manifest');
+    const manifest = await res.json();
+    const files = Array.isArray(manifest) ? manifest : manifest.images || [];
+    commImages = files
+      .filter(f => IMAGE_EXTENSIONS.some(ext => f.toLowerCase().endsWith(ext)))
+      .map(f => ({ src: `images/commissioned/${f}`, name: '' }));
+  } catch {
+    commEmpty.hidden = false;
+    return;
+  }
+  if (commImages.length === 0) { commEmpty.hidden = false; return; }
+  commissionedImages = commImages;
+  buildGrid(commImages, commGrid, allImages.length);
+}
+
+/* ── BUILD GRID (shared by both galleries) ───────── */
+function buildGrid(images, container, indexOffset) {
+  images.forEach((img, i) => {
+    const globalIndex = indexOffset + i;
     const item = document.createElement('div');
     item.className = 'masonry__item';
     item.setAttribute('role', 'listitem');
     item.setAttribute('tabindex', '0');
-    item.setAttribute('aria-label', `Open ${img.name} in full view`);
+    item.setAttribute('aria-label', 'Open artwork in full view');
 
     const image = new Image();
-    image.alt     = img.name;
-    image.loading = 'lazy';          // native lazy loading
+    image.alt      = 'Mandala artwork';
+    image.loading  = 'lazy';
     image.decoding = 'async';
 
-    const overlay = document.createElement('div');
-    overlay.className = 'masonry__item__overlay';
-    const label = document.createElement('span');
-    label.className = 'masonry__item__label';
-    label.textContent = img.name;
-    overlay.appendChild(label);
-
     item.appendChild(image);
-    item.appendChild(overlay);
-    grid.appendChild(item);
+    container.appendChild(item);
 
-    // Load image — only swap src after element is in DOM
     image.src = img.src;
     image.onerror = () => { item.style.display = 'none'; };
 
-    // Click / keyboard
-    item.addEventListener('click', () => openLightbox(i));
+    item.addEventListener('click', () => openLightbox(globalIndex));
     item.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(i); }
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openLightbox(globalIndex); }
     });
 
-    // Intersection Observer for staggered fade-in
-    observeItem(item, i);
+    observeItem(item, globalIndex);
   });
 }
-
-/* ── INTERSECTION OBSERVER ───────────────────────── */
 const observer = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (entry.isIntersecting) {
@@ -152,18 +165,6 @@ const observer = new IntersectionObserver((entries) => {
 function observeItem(el, i) {
   el.dataset.i = i;
   observer.observe(el);
-}
-
-/* ── COUNTER ANIMATION ───────────────────────────── */
-function animateCounter(target) {
-  if (!countPieces) return;
-  let current = 0;
-  const step = Math.ceil(target / 40);
-  const tick = setInterval(() => {
-    current = Math.min(current + step, target);
-    countPieces.textContent = current;
-    if (current >= target) clearInterval(tick);
-  }, 40);
 }
 
 /* ── LIGHTBOX ────────────────────────────────────── */
@@ -186,14 +187,14 @@ function closeLightbox() {
 }
 
 function showImage(index) {
-  currentIndex = (index + allImages.length) % allImages.length;
-  const { src, name } = allImages[currentIndex];
-  lbImg.src       = '';                     // trigger re-animation
+  const combined = [...allImages, ...commissionedImages];
+  currentIndex = (index + combined.length) % combined.length;
+  const { src } = combined[currentIndex];
+  lbImg.src = '';
   requestAnimationFrame(() => {
-    lbImg.src     = src;
-    lbImg.alt     = name;
-    lbCaption.textContent = name;
-    lbCounter.textContent = `${currentIndex + 1} / ${allImages.length}`;
+    lbImg.src = src;
+    lbImg.alt = 'Mandala artwork';
+    lbCounter.textContent = `${currentIndex + 1} / ${combined.length}`;
   });
 }
 
